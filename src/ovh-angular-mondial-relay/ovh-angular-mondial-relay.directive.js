@@ -24,6 +24,7 @@
    </file>
    </example>
  * @param {string} ng-model Variable that will recieve the selected relay.
+ * @param {string} [user-service='User'] The name of your user service, in case your service name is different from the default.
  */
 angular.module("ovh-angular-mondial-relay")
     .directive("mondialRelay", function (MONDIAL_RELAY_PICS, MONDIAL_RELAY) {
