@@ -104,11 +104,12 @@ angular.module("ovh-angular-mondial-relay")
             restrict: "AE",
             bindToController: true,
             scope: {
-                ngModel: "=?"
+                ngModel: "=?",
+                userService: "@"
             },
             templateUrl: "ovh-angular-mondial-relay/ovh-angular-mondial-relay.view.html",
             controllerAs: "$ctrl",
-            controller: function ($scope, $q, $translate, $timeout, $http, mondialRelay, SupplyMondialRelay, leafletBoundsHelpers, leafletEvents, leafletData, User) {
+            controller: function ($scope, $q, $translate, $timeout, $http, mondialRelay, SupplyMondialRelay, leafletBoundsHelpers, leafletEvents, leafletData, $injector) {
 
                 var self = this;
 
@@ -250,6 +251,7 @@ angular.module("ovh-angular-mondial-relay")
                  * @return {Promise}
                  */
                 this.gotoUserLoc = function () {
+                    var User = $injector.get(this.userService);
                     User.Lexi().get().$promise.then(function (me) {
                         if (!self.userSearch) {
                             var filter = {
@@ -295,6 +297,7 @@ angular.module("ovh-angular-mondial-relay")
 
                 this.$onInit = function init () {
                     this.logoPic64 = MONDIAL_RELAY_PICS.logo;
+                    this.userService = this.userService || "User";
 
                     this.map = {
                         focus: MONDIAL_RELAY.initialLocation,
