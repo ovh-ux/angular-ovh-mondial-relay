@@ -27,7 +27,7 @@
  * @param {string} [user-service='User'] The name of your user service, in case your service name is different from the default.
  */
 angular.module("ovh-angular-mondial-relay")
-    .directive("mondialRelay", function (MONDIAL_RELAY_PICS, MONDIAL_RELAY) {
+    .directive("mondialRelay", function (MONDIAL_RELAY_PICS, MONDIAL_RELAY, $translate) {
         "use strict";
 
         /**
@@ -72,11 +72,11 @@ angular.module("ovh-angular-mondial-relay")
         /**
          * Reformat the opening hours of the relays
          * @param {Object} opening Structure describing opening times {monday: [{start: "0800", end:"1900"}]}
-         * @returns {Array} List of open days [{day: "monday", opening: ["08:00-19:00"]}]
+         * @returns {Array} List of open days [{days: ["monday", "tuesday"], hours: ["08:00-19:00"]}]
          */
         var reformatOpening = function reformatOpening (opening) {
             var reformatTime = function (openingTime) {
-                return openingTime.substring(0, 2) + ":" + openingTime.substring(2, 4);
+                return openingTime.substring(0, 2) + "h" + (openingTime.substring(2, 4) === "00" ? '' : openingTime.substring(2, 4));
             };
             var getAllOpenings = function (openingTimes) {
                 return _.map(openingTimes, function (openingTime) {
@@ -87,17 +87,33 @@ angular.module("ovh-angular-mondial-relay")
                 });
             };
 
-            var result = _.chain(MONDIAL_RELAY.weekDays)
-                .filter(function (weekDay) {
-                    return !!opening[weekDay];
-                })
-                .map(function (weekDay) {
-                    return {
-                        day: weekDay,
-                        opening: getAllOpenings(opening[weekDay])
-                    };
-                })
-                .value();
+            var result = MONDIAL_RELAY.weekDays.map(function (weekDay) {
+                return {
+                    days: [weekDay],
+                    hours: getAllOpenings(opening[weekDay])
+                };
+            });
+            result.map(function (value, i) {
+                var index = 1;
+
+                if(!value.hours) {
+                    return value;
+                }
+
+                while (i + index < result.length && _.isEqual(value.hours, result[i + index].hours)) {
+                    value.days = _.union(value.days, result[i + index].days);
+                    delete result[i + index];
+                    index++;
+                }
+
+                if (value.days.length > 1) {
+                    value.days = $translate.instant('components_mondial_relay_' + value.days[0]) + '. ' + $translate.instant('components_mondial_relay_hours_to') + ' ' + $translate.instant('components_mondial_relay_' + value.days[value.days.length - 1]).toLowerCase() + '.';
+                } else if (value.days.length) {
+                    value.days = $translate.instant('components_mondial_relay_' + value.days[0] + '_long');
+                }
+                return result[i];
+            });
+
             return result;
         };
 
@@ -165,18 +181,17 @@ angular.module("ovh-angular-mondial-relay")
                             "leafletDirectiveMarker." + markerEvent,
                             function (event, args) {
                                 switch (event.name) {
-                                case "leafletDirectiveMarker.mouseover" :
-                                    self.markerHover(args.model.index);
-                                    break;
-                                case "leafletDirectiveMarker.mouseout" :
-                                    self.markerHover();
-                                    break;
-                                case "leafletDirectiveMarker.click":
-                                    self.select(self.foundRelays[args.model.index]);
-                                    break;
-                                default:
-
-                                    // Do nothing
+                                    case "leafletDirectiveMarker.mouseover" :
+                                        self.markerHover(args.model.index);
+                                        break;
+                                    case "leafletDirectiveMarker.mouseout" :
+                                        self.markerHover();
+                                        break;
+                                    case "leafletDirectiveMarker.click":
+                                        self.select(self.foundRelays[args.model.index]);
+                                        break;
+                                    default:
+                                        break;
                                 }
                             }
                         );
@@ -213,8 +228,25 @@ angular.module("ovh-angular-mondial-relay")
                     this.ngModel = null;
                     this.foundRelays = [];
 
+                    if (typeof filter === "undefined") {
+                        filter = this.filter;
+                        const searchQuery = _.get(filter, ["searchQuery"], "");
+                        if (searchQuery) {
+                            const zipcode = _.compact(searchQuery.match(/\d{5}/g));
+                            if (zipcode.length) {
+                                filter.zipcode = _.first(zipcode).trim();
+                            } else {
+                                const city = _.compact(searchQuery.match(/[A-z\s-]*/g));
+                                if (city.length) {
+                                    filter.city = _.first(city).trim();
+                                }
+                            }
+                            delete filter.searchQuery;
+                        }
+                    }
+
                     return this.mondialRelayService.v6().search(
-                        filter || this.filter,
+                        filter,
                         $scope
                     )
                         .then(function (resp) {

@@ -58,7 +58,7 @@ angular.module("ovh-angular-mondial-relay").constant("MONDIAL_RELAY", {
  * @param {string} [user-service='User'] The name of your user service, in case your service name is different from the default.
  */
 angular.module("ovh-angular-mondial-relay")
-    .directive("mondialRelay", ["MONDIAL_RELAY_PICS", "MONDIAL_RELAY", function (MONDIAL_RELAY_PICS, MONDIAL_RELAY) {
+    .directive("mondialRelay", ["MONDIAL_RELAY_PICS", "MONDIAL_RELAY", "$translate", function (MONDIAL_RELAY_PICS, MONDIAL_RELAY, $translate) {
         "use strict";
 
         /**
@@ -103,11 +103,11 @@ angular.module("ovh-angular-mondial-relay")
         /**
          * Reformat the opening hours of the relays
          * @param {Object} opening Structure describing opening times {monday: [{start: "0800", end:"1900"}]}
-         * @returns {Array} List of open days [{day: "monday", opening: ["08:00-19:00"]}]
+         * @returns {Array} List of open days [{days: ["monday", "tuesday"], hours: ["08:00-19:00"]}]
          */
         var reformatOpening = function reformatOpening (opening) {
             var reformatTime = function (openingTime) {
-                return openingTime.substring(0, 2) + ":" + openingTime.substring(2, 4);
+                return openingTime.substring(0, 2) + "h" + (openingTime.substring(2, 4) === "00" ? '' : openingTime.substring(2, 4));
             };
             var getAllOpenings = function (openingTimes) {
                 return _.map(openingTimes, function (openingTime) {
@@ -118,17 +118,33 @@ angular.module("ovh-angular-mondial-relay")
                 });
             };
 
-            var result = _.chain(MONDIAL_RELAY.weekDays)
-                .filter(function (weekDay) {
-                    return !!opening[weekDay];
-                })
-                .map(function (weekDay) {
-                    return {
-                        day: weekDay,
-                        opening: getAllOpenings(opening[weekDay])
-                    };
-                })
-                .value();
+            var result = MONDIAL_RELAY.weekDays.map(function (weekDay) {
+                return {
+                    days: [weekDay],
+                    hours: getAllOpenings(opening[weekDay])
+                };
+            });
+            result.map(function (value, i) {
+                var index = 1;
+
+                if(!value.hours) {
+                    return value;
+                }
+
+                while (i + index < result.length && _.isEqual(value.hours, result[i + index].hours)) {
+                    value.days = _.union(value.days, result[i + index].days);
+                    delete result[i + index];
+                    index++;
+                }
+
+                if (value.days.length > 1) {
+                    value.days = $translate.instant('components_mondial_relay_' + value.days[0]) + '. ' + $translate.instant('components_mondial_relay_hours_to') + ' ' + $translate.instant('components_mondial_relay_' + value.days[value.days.length - 1]).toLowerCase() + '.';
+                } else if (value.days.length) {
+                    value.days = $translate.instant('components_mondial_relay_' + value.days[0] + '_long');
+                }
+                return result[i];
+            });
+
             return result;
         };
 
@@ -196,18 +212,17 @@ angular.module("ovh-angular-mondial-relay")
                             "leafletDirectiveMarker." + markerEvent,
                             function (event, args) {
                                 switch (event.name) {
-                                case "leafletDirectiveMarker.mouseover" :
-                                    self.markerHover(args.model.index);
-                                    break;
-                                case "leafletDirectiveMarker.mouseout" :
-                                    self.markerHover();
-                                    break;
-                                case "leafletDirectiveMarker.click":
-                                    self.select(self.foundRelays[args.model.index]);
-                                    break;
-                                default:
-
-                                    // Do nothing
+                                    case "leafletDirectiveMarker.mouseover" :
+                                        self.markerHover(args.model.index);
+                                        break;
+                                    case "leafletDirectiveMarker.mouseout" :
+                                        self.markerHover();
+                                        break;
+                                    case "leafletDirectiveMarker.click":
+                                        self.select(self.foundRelays[args.model.index]);
+                                        break;
+                                    default:
+                                        break;
                                 }
                             }
                         );
@@ -244,8 +259,25 @@ angular.module("ovh-angular-mondial-relay")
                     this.ngModel = null;
                     this.foundRelays = [];
 
+                    if (typeof filter === "undefined") {
+                        filter = this.filter;
+                        const searchQuery = _.get(filter, ["searchQuery"], "");
+                        if (searchQuery) {
+                            const zipcode = _.compact(searchQuery.match(/\d{5}/g));
+                            if (zipcode.length) {
+                                filter.zipcode = _.first(zipcode).trim();
+                            } else {
+                                const city = _.compact(searchQuery.match(/[A-z\s-]*/g));
+                                if (city.length) {
+                                    filter.city = _.first(city).trim();
+                                }
+                            }
+                            delete filter.searchQuery;
+                        }
+                    }
+
                     return this.mondialRelayService.v6().search(
-                        filter || this.filter,
+                        filter,
                         $scope
                     )
                         .then(function (resp) {
@@ -458,117 +490,122 @@ angular.module('ovh-angular-mondial-relay').run(['$templateCache', function($tem
 
   $templateCache.put('ovh-angular-mondial-relay/ovh-angular-mondial-relay.view.html',
     "<div class=\"mondial-relay\"\n" +
-    "    data-ng-if=\"!$ctrl.loading.init\">\n" +
+    "     data-ng-if=\"!$ctrl.loading.init\">\n" +
+    "\n" +
+    "    <p data-translate=\"components_mondial_relay_head\"></p>\n" +
+    "    <div class=\"row mb-5\"\n" +
+    "         data-ng-class=\"{ 'has-error': $ctrl.message }\">\n" +
+    "        <div class=\"clearfix col-md-6\">\n" +
+    "            <form class=\"form-group\"\n" +
+    "                  role=\"search\"\n" +
+    "                  action=\"\"\n" +
+    "                  data-ng-submit=\"$ctrl.search()\">\n" +
+    "                <div class=\"input-group\">\n" +
+    "                    <input class=\"form-control\"\n" +
+    "                           type=\"text\"\n" +
+    "                           id=\"search-relay\"\n" +
+    "                           data-ng-model=\"$ctrl.filter.searchQuery\"\n" +
+    "                           data-translate-attr=\"{ 'placeholder': 'components_mondial_relay_city_or_zipcode_label', 'aria-label': 'components_mondial_relay_city_or_zipcode_label' }\">\n" +
+    "                    <div class=\"input-group-btn\">\n" +
+    "                        <button type=\"submit\"\n" +
+    "                                class=\"btn btn-primary\"\n" +
+    "                                data-ng-disabled=\"!$ctrl.filter.searchQuery\"\n" +
+    "                                data-translate-attr=\"{ 'aria-label': 'search' }\">\n" +
+    "                            <i class=\"fa fa-search\" aria-hidden=\"true\"></i>\n" +
+    "                        </button>\n" +
+    "                    </div>\n" +
+    "                </div>\n" +
+    "            </form>\n" +
+    "        </div>\n" +
+    "        <div class=\"col-md-6\">\n" +
+    "            <span class=\"mondial-loc\"\n" +
+    "                  data-ng-if=\"$ctrl.referenceAddress && !$ctrl.message\"\n" +
+    "                  data-translate=\"components_mondial_relay_search_results\"\n" +
+    "                  data-translate-values=\"{ 'loc': $ctrl.referenceAddress }\">\n" +
+    "            </span>\n" +
+    "            <span class=\"mondial-loc help-block\"\n" +
+    "                  data-ng-if=\"$ctrl.message\"\n" +
+    "                  data-ng-bind=\"$ctrl.message\">\n" +
+    "            </span>\n" +
+    "        </div>\n" +
+    "    </div>\n" +
     "\n" +
     "    <div class=\"row\">\n" +
-    "        <div class=\"col-xs-3\">\n" +
-    "            <span class=\"mondial-logo\"></span>\n" +
+    "        <div class=\"col-sm-6\">\n" +
+    "            <leaflet id=\"{{$ctrl.mapId}}\"\n" +
+    "                     data-markers=\"$ctrl.map.markers\"\n" +
+    "                     data-center=\"$ctrl.map.center\"\n" +
+    "                     data-event-broadcast=\"$ctrl.map.events\"\n" +
+    "                     data-bounds=\"$ctrl.map.bounds\">\n" +
+    "            </leaflet>\n" +
     "        </div>\n" +
-    "        <div class=\"col-xs-9\">\n" +
-    "            <p data-translate=\"components_mondial_relay_head\"></p>\n" +
-    "            <div class=\"clearfix mb-5\">\n" +
-    "                <form class=\"form-inline float-right\"\n" +
-    "                      data-ng-submit=\"$ctrl.search()\">\n" +
-    "                    <div class=\"form-group\">\n" +
-    "                        <input class=\"form-control\"\n" +
-    "                               type=\"text\"\n" +
-    "                               data-ng-model=\"$ctrl.filter.city\"\n" +
-    "                               data-translate-attr=\"{ 'placeholder': 'components_mondial_relay_city_label' }\">\n" +
-    "                    </div>\n" +
-    "                    <div class=\"form-group\">\n" +
-    "                        <input class=\"form-control\"\n" +
-    "                           type=\"text\"\n" +
-    "                           size=\"10\"\n" +
-    "                           data-ng-model=\"$ctrl.filter.zipcode\"\n" +
-    "                           data-translate-attr=\"{ 'placeholder': 'components_mondial_relay_zipcode_label' }\">\n" +
-    "                   </div>\n" +
-    "                    <button type=\"submit\"\n" +
-    "                            class=\"btn btn-primary\"\n" +
-    "                            data-ng-disabled=\"(!$ctrl.filter.zipcode) && (!$ctrl.filter.city)\"\n" +
-    "                            data-translate-attr=\"{ 'title': 'search' }\">\n" +
-    "                        <i class=\"fa fa-search\" aria-hidden=\"true\"></i>\n" +
-    "                    </button>\n" +
-    "                </form>\n" +
-    "            </div>\n" +
-    "            <div class=\"text-right\">\n" +
-    "                <span class=\"mondial-loc\"\n" +
-    "                      data-ng-if=\"$ctrl.referenceAddress && !$ctrl.message\"\n" +
-    "                      data-translate=\"components_mondial_relay_search_results\"\n" +
-    "                      data-translate-values=\"{ 'loc': $ctrl.referenceAddress }\">\n" +
-    "                </span>\n" +
-    "                <span class=\"mondial-loc\"\n" +
-    "                      data-ng-if=\"$ctrl.message\"\n" +
-    "                      data-ng-bind=\"message\">\n" +
-    "                </span>\n" +
-    "            </div>\n" +
+    "        <div class=\"col-sm-6\">\n" +
+    "            <fieldset class=\"mondial-results mt-5\">\n" +
+    "                <legend class=\"ng-hide\"\n" +
+    "                        aria-hidden=\"true\"\n" +
+    "                        data-translate=\"components_mondial_relay_choose\"></legend>\n" +
+    "                <ul class=\"list-group\">\n" +
+    "                    <li class=\"list-group-item\"\n" +
+    "                        data-ng-repeat=\"relay in $ctrl.foundRelays track by relay.id\"\n" +
+    "                        data-ng-mouseover=\"$ctrl.markerHover($index)\"\n" +
+    "                        data-ng-click=\"$ctrl.select(relay)\"\n" +
+    "                        data-ng-class=\"{ 'active': relay.selected, 'marker-hover': relay.markerHover }\">\n" +
+    "                        <div class=\"relay-cell\">\n" +
+    "                            <div class=\"oui-radio\">\n" +
+    "                                <input class=\"oui-radio__input\"\n" +
+    "                                       name=\"oui-radio\"\n" +
+    "                                       value=\"oui-radio-{{$index}}\"\n" +
+    "                                       id=\"oui-radio-{{$index}}\"\n" +
+    "                                       type=\"radio\">\n" +
+    "                                <label class=\"oui-radio__label-container\"\n" +
+    "                                       for=\"oui-radio-{{$index}}\">\n" +
+    "                                    <span class=\"oui-radio__label\">\n" +
+    "                                        <span class=\"mondial-marker\"\n" +
+    "                                              data-ng-bind=\"relay.marker\">\n" +
+    "                                        </span>\n" +
+    "                                        <strong class=\"mondial-relay-name\"\n" +
+    "                                                data-ng-bind=\"relay.name\">\n" +
+    "                                        </strong>\n" +
+    "                                        <span class=\"mondial-relay-caret glyphicon\"\n" +
+    "                                              data-ng-class=\"'glyphicon-menu-' + (relay.selected? 'up': 'down')\"></span>\n" +
+    "                                    </span>\n" +
+    "                                    <span class=\"radio-description\">\n" +
+    "                                        <span class=\"radio-description-relay\">\n" +
+    "                                            <span class=\"mondial-relay-address\"\n" +
+    "                                                  data-ng-bind=\"relay.address\">\n" +
+    "                                            </span>\n" +
+    "                                             –\n" +
+    "                                            <span class=\"mondial-relay-city\">\n" +
+    "                                                <span data-ng-bind=\"relay.zipcode\"></span>\n" +
+    "                                                <span data-ng-bind=\"relay.city\"></span>\n" +
+    "                                            </span>\n" +
+    "                                        </span>\n" +
+    "                                        <span data-ng-if=\"relay.selected\">\n" +
+    "                                            <ul class=\"mondial-opening\">\n" +
+    "                                                <li class=\"row\"\n" +
+    "                                                    data-ng-repeat=\"item in relay.opening track by $index\"\n" +
+    "                                                    data-ng-if=\"item.days\">\n" +
+    "                                                    <span class=\"col-xs-4 text-right\"\n" +
+    "                                                          data-ng-bind=\"item.days\"></span>\n" +
+    "                                                    <span class=\"col-xs-8\">\n" +
+    "                                                        <em data-ng-if=\"!item.hours.length\"\n" +
+    "                                                            data-translate=\"components_mondial_relay_off\"></em>\n" +
+    "                                                        <span data-ng-repeat=\"hour in item.hours track by $index\">\n" +
+    "                                                            {{ ($first? '': ' / ') + hour }}\n" +
+    "                                                        </span>\n" +
+    "                                                    </span>\n" +
+    "                                                </li>\n" +
+    "                                            </ul>\n" +
+    "                                        </span>\n" +
+    "                                    </span>\n" +
+    "                                </label>\n" +
+    "                            </div>\n" +
+    "                        </div>\n" +
+    "                    </li>\n" +
+    "                </ul>\n" +
+    "            </fieldset>\n" +
     "        </div>\n" +
     "    </div>\n" +
-    "    <!-- /.row -->\n" +
-    "\n" +
-    "    <leaflet id=\"{{$ctrl.mapId}}\"\n" +
-    "             data-markers=\"$ctrl.map.markers\"\n" +
-    "             data-center=\"$ctrl.map.center\"\n" +
-    "             data-event-broadcast=\"$ctrl.map.events\"\n" +
-    "             data-bounds=\"$ctrl.map.bounds\">\n" +
-    "    </leaflet>\n" +
-    "\n" +
-    "    <div class=\"mondial-results mt-5\">\n" +
-    "        <ul>\n" +
-    "            <li data-ng-repeat=\"relay in $ctrl.foundRelays track by relay.id\"\n" +
-    "                data-ng-mouseover=\"$ctrl.markerHover($index)\"\n" +
-    "                data-ng-click=\"$ctrl.select(relay)\"\n" +
-    "                data-ng-class=\"{\n" +
-    "                    'selected': relay.selected,\n" +
-    "                    'marker-hover': relay.markerHover\n" +
-    "                }\">\n" +
-    "                <div class=\"relay-cell relay-marker\">\n" +
-    "                    <span class=\"mondial-marker\"\n" +
-    "                          data-ng-bind=\"relay.marker\">\n" +
-    "                    </span>\n" +
-    "                </div>\n" +
-    "                <div class=\"relay-cell\">\n" +
-    "                    <strong class=\"mondial-relay-name\"\n" +
-    "                            data-ng-bind=\"relay.name\">\n" +
-    "                    </strong>\n" +
-    "                    <div class=\"row\"\n" +
-    "                         data-ng-show=\"relay.selected\" >\n" +
-    "                        <div class=\"col-xs-3\">\n" +
-    "                            <span class=\"mondial-relay-address\"\n" +
-    "                                  data-ng-bind=\"relay.address\">\n" +
-    "                            </span>\n" +
-    "                            <span class=\"mondial-relay-city\">\n" +
-    "                                <span data-ng-bind=\"relay.zipcode\"></span>\n" +
-    "                                <span data-ng-bind=\"relay.city\"></span>\n" +
-    "                            </span>\n" +
-    "                            <img class=\"mondial-relay-pic\"\n" +
-    "                                 data-ng-if=\"relay.pictureUrl\"\n" +
-    "                                 data-ng-src=\"{{ relay.pictureUrl }}\">\n" +
-    "                        </div>\n" +
-    "                        <div class=\"col-xs-9\">\n" +
-    "                            <ul class=\"mondial-opening\">\n" +
-    "                                <li class=\"row\"\n" +
-    "                                    data-ng-repeat=\"day in relay.opening track by day.day\">\n" +
-    "                                    <div class=\"col-lg-2 col-md-4 col-xs-3\"\n" +
-    "                                         data-ng-bind=\"('components_mondial_relay_' + day.day) | translate\">\n" +
-    "                                    </div>\n" +
-    "                                    <div class=\"col-md-4 col-xs-4\"\n" +
-    "                                         data-ng-repeat=\"hour in day.opening\"\n" +
-    "                                         data-ng-bind=\"hour\">\n" +
-    "                                    </div>\n" +
-    "                                </li>\n" +
-    "                            </ul>\n" +
-    "                        </div>\n" +
-    "                    </div>\n" +
-    "                    <div class=\"mondial-relay-city\"\n" +
-    "                         data-ng-hide=\"relay.selected\">\n" +
-    "                        <span data-ng-bind=\"relay.zipcode\"></span>\n" +
-    "                        <span data-ng-bind=\"relay.city\"></span>\n" +
-    "                    </div>\n" +
-    "                </div>\n" +
-    "            </li>\n" +
-    "        </ul>\n" +
-    "    </div>\n" +
-    "    <!-- /.mondial-results -->\n" +
     "</div>\n"
   );
 
