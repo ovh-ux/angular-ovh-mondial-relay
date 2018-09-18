@@ -58,7 +58,7 @@ angular.module("ovh-angular-mondial-relay").constant("MONDIAL_RELAY", {
  * @param {string} [user-service='User'] The name of your user service, in case your service name is different from the default.
  */
 angular.module("ovh-angular-mondial-relay")
-    .directive("mondialRelay", ["MONDIAL_RELAY_PICS", "MONDIAL_RELAY", "$translate", function (MONDIAL_RELAY_PICS, MONDIAL_RELAY, $translate) {
+    .directive("mondialRelay", ["$translate", "MONDIAL_RELAY", "MONDIAL_RELAY_PICS", function ($translate, MONDIAL_RELAY, MONDIAL_RELAY_PICS) {
         "use strict";
 
         /**
@@ -107,7 +107,7 @@ angular.module("ovh-angular-mondial-relay")
          */
         var reformatOpening = function reformatOpening (opening) {
             var reformatTime = function (openingTime) {
-                return openingTime.substring(0, 2) + "h" + (openingTime.substring(2, 4) === "00" ? '' : openingTime.substring(2, 4));
+                return openingTime.substring(0, 2) + "h" + (openingTime.substring(2, 4) === "00" ? "" : openingTime.substring(2, 4));
             };
             var getAllOpenings = function (openingTimes) {
                 return _.map(openingTimes, function (openingTime) {
@@ -124,23 +124,28 @@ angular.module("ovh-angular-mondial-relay")
                     hours: getAllOpenings(opening[weekDay])
                 };
             });
-            result.map(function (value, i) {
+            result.map(function (relayDay, i) {
                 var index = 1;
 
-                if(!value.hours) {
-                    return value;
+                // relayDay without hours parameter === closed (yet kept in array)
+                if (!relayDay.hours) {
+                    return relayDay;
                 }
 
-                while (i + index < result.length && _.isEqual(value.hours, result[i + index].hours)) {
-                    value.days = _.union(value.days, result[i + index].days);
+                // In order to group following opening days with equal time windows
+                // We loop until time windows are different (or at the end of the array)
+                while (i + index < result.length && _.isEqual(relayDay.hours, result[i + index].hours)) {
+                    relayDay.days = _.union(relayDay.days, result[i + index].days);
+                    // Also we remove duplicate line
                     delete result[i + index];
                     index++;
                 }
 
-                if (value.days.length > 1) {
-                    value.days = $translate.instant('components_mondial_relay_' + value.days[0]) + '. ' + $translate.instant('components_mondial_relay_hours_to') + ' ' + $translate.instant('components_mondial_relay_' + value.days[value.days.length - 1]).toLowerCase() + '.';
-                } else if (value.days.length) {
-                    value.days = $translate.instant('components_mondial_relay_' + value.days[0] + '_long');
+                // Then we build regarding the nature of each relayDay (single time windows, grouped ones or closed)
+                if (relayDay.days.length > 1) {
+                    relayDay.days = $translate.instant("components_mondial_relay_" + relayDay.days[0]) + ". " + $translate.instant("components_mondial_relay_hours_to") + " " + $translate.instant("components_mondial_relay_" + relayDay.days[relayDay.days.length - 1]).toLowerCase() + ".";
+                } else if (relayDay.days.length) {
+                    relayDay.days = $translate.instant("components_mondial_relay_" + relayDay.days[0] + "_long");
                 }
                 return result[i];
             });
@@ -158,7 +163,7 @@ angular.module("ovh-angular-mondial-relay")
             },
             templateUrl: "ovh-angular-mondial-relay/ovh-angular-mondial-relay.view.html",
             controllerAs: "$ctrl",
-            controller: ["$scope", "$q", "$translate", "$timeout", "$http", "mondialRelay", "leafletBoundsHelpers", "leafletEvents", "leafletData", "$injector", function ($scope, $q, $translate, $timeout, $http, mondialRelay, leafletBoundsHelpers, leafletEvents, leafletData, $injector) {
+            controller: ["$http", "$injector", "$q", "$scope", "$timeout", "leafletBoundsHelpers", "leafletData", "leafletEvents", "mondialRelay", function ($http, $injector, $q, $scope, $timeout, leafletBoundsHelpers, leafletData, leafletEvents, mondialRelay) {
 
                 var self = this;
 
@@ -212,17 +217,17 @@ angular.module("ovh-angular-mondial-relay")
                             "leafletDirectiveMarker." + markerEvent,
                             function (event, args) {
                                 switch (event.name) {
-                                    case "leafletDirectiveMarker.mouseover" :
-                                        self.markerHover(args.model.index);
-                                        break;
-                                    case "leafletDirectiveMarker.mouseout" :
-                                        self.markerHover();
-                                        break;
-                                    case "leafletDirectiveMarker.click":
-                                        self.select(self.foundRelays[args.model.index]);
-                                        break;
-                                    default:
-                                        break;
+                                case "leafletDirectiveMarker.mouseover" :
+                                    self.markerHover(args.model.index);
+                                    break;
+                                case "leafletDirectiveMarker.mouseout" :
+                                    self.markerHover();
+                                    break;
+                                case "leafletDirectiveMarker.click":
+                                    self.select(self.foundRelays[args.model.index]);
+                                    break;
+                                default:
+                                    break;
                                 }
                             }
                         );
@@ -258,21 +263,22 @@ angular.module("ovh-angular-mondial-relay")
                     this.loading.search = true;
                     this.ngModel = null;
                     this.foundRelays = [];
+                    var filt = filter;
 
-                    if (typeof filter === "undefined") {
-                        filter = this.filter;
-                        const searchQuery = _.get(filter, ["searchQuery"], "");
+                    if (!filt) {
+                        filt = this.filter;
+                        var searchQuery = _.get(filt, "searchQuery", "");
                         if (searchQuery) {
-                            const zipcode = _.compact(searchQuery.match(/\d{5}/g));
+                            var zipcode = _.compact(searchQuery.match(/\d{5}/g));
                             if (zipcode.length) {
-                                filter.zipcode = _.first(zipcode).trim();
+                                filt.zipcode = _.first(zipcode).trim();
                             } else {
-                                const city = _.compact(searchQuery.match(/[A-z\s-]*/g));
+                                var city = _.compact(searchQuery.match(/[A-z\s-]*/g));
                                 if (city.length) {
-                                    filter.city = _.first(city).trim();
+                                    filt.city = _.first(city).trim();
                                 }
                             }
-                            delete filter.searchQuery;
+                            delete filt.searchQuery;
                         }
                     }
 
@@ -495,7 +501,7 @@ angular.module('ovh-angular-mondial-relay').run(['$templateCache', function($tem
     "    <p data-translate=\"components_mondial_relay_head\"></p>\n" +
     "    <div class=\"row mb-5\"\n" +
     "         data-ng-class=\"{ 'has-error': $ctrl.message }\">\n" +
-    "        <div class=\"clearfix col-md-6\">\n" +
+    "        <div class=\"col-md-6\">\n" +
     "            <form class=\"form-group\"\n" +
     "                  role=\"search\"\n" +
     "                  action=\"\"\n" +
@@ -532,7 +538,7 @@ angular.module('ovh-angular-mondial-relay').run(['$templateCache', function($tem
     "\n" +
     "    <div class=\"row\">\n" +
     "        <div class=\"col-sm-6\">\n" +
-    "            <leaflet id=\"{{$ctrl.mapId}}\"\n" +
+    "            <leaflet id=\"{{::$ctrl.mapId}}\"\n" +
     "                     data-markers=\"$ctrl.map.markers\"\n" +
     "                     data-center=\"$ctrl.map.center\"\n" +
     "                     data-event-broadcast=\"$ctrl.map.events\"\n" +
@@ -567,7 +573,8 @@ angular.module('ovh-angular-mondial-relay').run(['$templateCache', function($tem
     "                                                data-ng-bind=\"relay.name\">\n" +
     "                                        </strong>\n" +
     "                                        <span class=\"mondial-relay-caret glyphicon\"\n" +
-    "                                              data-ng-class=\"'glyphicon-menu-' + (relay.selected? 'up': 'down')\"></span>\n" +
+    "                                              data-ng-class=\"'glyphicon-menu-' + (relay.selected? 'up': 'down')\"\n" +
+    "                                              aria-hidden=\"true\"></span>\n" +
     "                                    </span>\n" +
     "                                    <span class=\"radio-description\">\n" +
     "                                        <span class=\"radio-description-relay\">\n" +
@@ -580,22 +587,20 @@ angular.module('ovh-angular-mondial-relay').run(['$templateCache', function($tem
     "                                                <span data-ng-bind=\"relay.city\"></span>\n" +
     "                                            </span>\n" +
     "                                        </span>\n" +
-    "                                        <span data-ng-if=\"relay.selected\">\n" +
-    "                                            <ul class=\"mondial-opening\">\n" +
-    "                                                <li class=\"row\"\n" +
-    "                                                    data-ng-repeat=\"item in relay.opening track by $index\"\n" +
-    "                                                    data-ng-if=\"item.days\">\n" +
-    "                                                    <span class=\"col-xs-4 text-right\"\n" +
-    "                                                          data-ng-bind=\"item.days\"></span>\n" +
-    "                                                    <span class=\"col-xs-8\">\n" +
-    "                                                        <em data-ng-if=\"!item.hours.length\"\n" +
-    "                                                            data-translate=\"components_mondial_relay_off\"></em>\n" +
-    "                                                        <span data-ng-repeat=\"hour in item.hours track by $index\">\n" +
-    "                                                            {{ ($first? '': ' / ') + hour }}\n" +
-    "                                                        </span>\n" +
-    "                                                    </span>\n" +
-    "                                                </li>\n" +
-    "                                            </ul>\n" +
+    "                                        <span class=\"mondial-opening\"\n" +
+    "                                              data-ng-if=\"relay.selected\">\n" +
+    "                                            <div class=\"row\"\n" +
+    "                                                data-ng-repeat=\"item in relay.opening track by $index\"\n" +
+    "                                                data-ng-if=\"item.days\">\n" +
+    "                                                <span class=\"col-xs-4 text-right\"\n" +
+    "                                                      data-ng-bind=\"item.days\"></span>\n" +
+    "                                                <span class=\"col-xs-8\">\n" +
+    "                                                    <em data-ng-if=\"!item.hours.length\"\n" +
+    "                                                        data-translate=\"components_mondial_relay_off\"></em>\n" +
+    "                                                    <span data-ng-repeat=\"hour in item.hours track by $index\"\n" +
+    "                                                          data-ng-bind=\"($first? '': ' / ') + hour\"></span>\n" +
+    "                                                </span>\n" +
+    "                                            </div>\n" +
     "                                        </span>\n" +
     "                                    </span>\n" +
     "                                </label>\n" +

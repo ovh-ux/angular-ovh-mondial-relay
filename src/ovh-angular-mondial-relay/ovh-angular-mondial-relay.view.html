@@ -4,7 +4,7 @@
     <p data-translate="components_mondial_relay_head"></p>
     <div class="row mb-5"
          data-ng-class="{ 'has-error': $ctrl.message }">
-        <div class="clearfix col-md-6">
+        <div class="col-md-6">
             <form class="form-group"
                   role="search"
                   action=""
@@ -41,7 +41,7 @@
 
     <div class="row">
         <div class="col-sm-6">
-            <leaflet id="{{$ctrl.mapId}}"
+            <leaflet id="{{::$ctrl.mapId}}"
                      data-markers="$ctrl.map.markers"
                      data-center="$ctrl.map.center"
                      data-event-broadcast="$ctrl.map.events"
@@ -76,7 +76,8 @@
                                                 data-ng-bind="relay.name">
                                         </strong>
                                         <span class="mondial-relay-caret glyphicon"
-                                              data-ng-class="'glyphicon-menu-' + (relay.selected? 'up': 'down')"></span>
+                                              data-ng-class="'glyphicon-menu-' + (relay.selected? 'up': 'down')"
+                                              aria-hidden="true"></span>
                                     </span>
                                     <span class="radio-description">
                                         <span class="radio-description-relay">
@@ -89,22 +90,20 @@
                                                 <span data-ng-bind="relay.city"></span>
                                             </span>
                                         </span>
-                                        <span data-ng-if="relay.selected">
-                                            <ul class="mondial-opening">
-                                                <li class="row"
-                                                    data-ng-repeat="item in relay.opening track by $index"
-                                                    data-ng-if="item.days">
-                                                    <span class="col-xs-4 text-right"
-                                                          data-ng-bind="item.days"></span>
-                                                    <span class="col-xs-8">
-                                                        <em data-ng-if="!item.hours.length"
-                                                            data-translate="components_mondial_relay_off"></em>
-                                                        <span data-ng-repeat="hour in item.hours track by $index">
-                                                            {{ ($first? '': ' / ') + hour }}
-                                                        </span>
-                                                    </span>
-                                                </li>
-                                            </ul>
+                                        <span class="mondial-opening"
+                                              data-ng-if="relay.selected">
+                                            <div class="row"
+                                                data-ng-repeat="item in relay.opening track by $index"
+                                                data-ng-if="item.days">
+                                                <span class="col-xs-4 text-right"
+                                                      data-ng-bind="item.days"></span>
+                                                <span class="col-xs-8">
+                                                    <em data-ng-if="!item.hours.length"
+                                                        data-translate="components_mondial_relay_off"></em>
+                                                    <span data-ng-repeat="hour in item.hours track by $index"
+                                                          data-ng-bind="($first? '': ' / ') + hour"></span>
+                                                </span>
+                                            </div>
                                         </span>
                                     </span>
                                 </label>
