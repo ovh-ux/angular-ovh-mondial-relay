@@ -263,22 +263,22 @@ angular.module("ovh-angular-mondial-relay")
                     this.loading.search = true;
                     this.ngModel = null;
                     this.foundRelays = [];
-                    var filt = filter;
+                    var parsedFilter = filter;
 
-                    if (!filt) {
-                        filt = this.filter;
-                        var searchQuery = _.get(filt, "searchQuery", "");
+                    if (!parsedFilter) {
+                        parsedFilter = this.filter;
+                        var searchQuery = _.get(parsedFilter, "searchQuery", "");
                         if (searchQuery) {
                             var zipcode = _.compact(searchQuery.match(/\d{5}/g));
                             if (zipcode.length) {
-                                filt.zipcode = _.first(zipcode).trim();
+                                parsedFilter.zipcode = _.first(zipcode).trim();
                             } else {
                                 var city = _.compact(searchQuery.match(/[A-z\s-]*/g));
                                 if (city.length) {
-                                    filt.city = _.first(city).trim();
+                                    parsedFilter.city = _.first(city).trim();
                                 }
                             }
-                            delete filt.searchQuery;
+                            delete parsedFilter.searchQuery;
                         }
                     }
 
