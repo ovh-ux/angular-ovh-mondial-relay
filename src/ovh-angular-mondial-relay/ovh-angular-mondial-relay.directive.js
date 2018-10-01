@@ -76,14 +76,14 @@ angular.module("ovh-angular-mondial-relay")
          */
         var reformatOpening = function reformatOpening (opening) {
             var reformatTime = function (openingTime) {
-                return openingTime.substring(0, 2) + "h" + (openingTime.substring(2, 4) === "00" ? "" : openingTime.substring(2, 4));
+                return openingTime.substring(0, 2) + ":" + openingTime.substring(2, 4);
             };
             var getAllOpenings = function (openingTimes) {
                 return _.map(openingTimes, function (openingTime) {
                     return [
                         reformatTime(openingTime.start),
                         reformatTime(openingTime.end)
-                    ].join("-");
+                    ].join("—");
                 });
             };
 
@@ -242,7 +242,7 @@ angular.module("ovh-angular-mondial-relay")
                             if (zipcode.length) {
                                 parsedFilter.zipcode = _.first(zipcode).trim();
                             } else {
-                                var city = _.compact(searchQuery.match(/[A-z\s-]*/g));
+                                var city = _.compact(searchQuery.match(/^[A-z\u00C0-\u024F][A-z\u00C0-\u024F'\s\-]*[A-z\u00C0-\u024F]$/g));
                                 if (city.length) {
                                     parsedFilter.city = _.first(city).trim();
                                 }
