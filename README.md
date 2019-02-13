@@ -1,4 +1,4 @@
-# @ovh-ux/ng-ovh-mondial-relay
+# ng-ovh-mondial-relay
 
 > Display a map to select mondial relay
 
