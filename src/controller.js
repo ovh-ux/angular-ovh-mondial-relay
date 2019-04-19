@@ -10,6 +10,8 @@ import pick from 'lodash/pick';
 import union from 'lodash/union';
 import uniqueId from 'lodash/uniqueId';
 
+import { PICTURES as MONDIAL_RELAY_PICS, MONDIAL_RELAY, MONDIAL_RELAY_ELEMENT } from './constants';
+
 export default class {
   /* @ngInject */
   constructor(
@@ -22,8 +24,6 @@ export default class {
     leafletBoundsHelpers,
     leafletData,
     leafletEvents,
-    MONDIAL_RELAY,
-    MONDIAL_RELAY_PICS,
   ) {
     this.$http = $http;
     this.$injector = $injector;
@@ -34,8 +34,6 @@ export default class {
     this.leafletBoundsHelpers = leafletBoundsHelpers;
     this.leafletData = leafletData;
     this.leafletEvents = leafletEvents;
-    this.MONDIAL_RELAY = MONDIAL_RELAY;
-    this.MONDIAL_RELAY_PICS = MONDIAL_RELAY_PICS;
   }
 
   $onInit() {
@@ -44,16 +42,16 @@ export default class {
       search: false,
     };
 
-    this.mapId = uniqueId('mondial-relay');
+    this.mapId = uniqueId(MONDIAL_RELAY_ELEMENT);
     this.userService = this.userService || this.$injector.get('OvhApiMe');
     this.mondialRelayService = this.mondialRelayService || this.$injector.get('OvhApiSupplyMondialRelay');
 
     this.map = {
-      focus: this.MONDIAL_RELAY.initialLocation,
+      focus: MONDIAL_RELAY.initialLocation,
       center: {},
       markers: [],
       bounds: this.leafletBoundsHelpers
-        .createBoundsFromArray(this.MONDIAL_RELAY.initialBoundingBox),
+        .createBoundsFromArray(MONDIAL_RELAY.initialBoundingBox),
       events: {
         markers: {
           enable: this.leafletEvents.getAvailableMarkerEvents(),
@@ -65,42 +63,38 @@ export default class {
     this.foundRelays = [];
     this.ngModel = null;
     this.filter = {
-      country: this.MONDIAL_RELAY.defaultCountry,
+      country: MONDIAL_RELAY.defaultCountry,
     };
 
-    // workaround to fix display bug on the map
-    this.leafletData.getMap(this.mapId).then((leafletMap) => {
-      this.leafletMap = leafletMap;
-      this.$timeout(() => {
-        leafletMap.invalidateSize();
-        leafletMap.fitBounds(this.MONDIAL_RELAY.initialBoundingBox);
-      });
-    });
+    return this.$q.all([
+      // workaround to fix display bug on the map
+      this.leafletData.getMap(this.mapId).then((leafletMap) => {
+        this.leafletMap = leafletMap;
+        this.$timeout(() => {
+          leafletMap.invalidateSize();
+          leafletMap.fitBounds(MONDIAL_RELAY.initialBoundingBox);
+        });
+      }),
 
-    this.loading.init = false;
-    return this.gotoUserLoc();
+      this.gotoUserLoc(),
+    ])
+      .finally(() => {
+        this.loading.init = false;
+      });
   }
 
   /**
    * Generate the icon object for the marker
    * @param index
-   * @returns {{
-   *    iconUrl: string,
-   *    shadowUrl: string,
-   *    iconSize: number[],
-   *    shadowSize: number[],
-   *    iconAnchor: number[],
-   *    shadowAnchor: number[],
-   *    popupAnchor: *[],
-   * }}
+   * @returns {Object}
    */
   getMarkerIcon(index) {
     return assignIn(
       {
-        iconUrl: this.MONDIAL_RELAY_PICS[`gmaps_pr02${this.constructor.getMarkerName(index)}`],
-        shadowUrl: this.MONDIAL_RELAY_PICS.gmaps_pr_shadow,
+        iconUrl: MONDIAL_RELAY_PICS[`gmaps_pr02${this.constructor.getMarkerName(index)}`],
+        shadowUrl: MONDIAL_RELAY_PICS.gmaps_pr_shadow,
       },
-      pick(this.MONDIAL_RELAY, ['iconSize', 'shadowSize', 'iconAnchor', 'shadowAnchor', 'popupAnchor']),
+      pick(MONDIAL_RELAY, ['iconSize', 'shadowSize', 'iconAnchor', 'shadowAnchor', 'popupAnchor']),
     );
   }
 
@@ -121,7 +115,7 @@ export default class {
       reformatTime(openingTime.end),
     ].join('—'));
 
-    const result = this.MONDIAL_RELAY.weekDays.map(weekDay => ({
+    const result = MONDIAL_RELAY.weekDays.map(weekDay => ({
       days: [weekDay],
       hours: getAllOpenings(opening[weekDay]),
     }));
@@ -319,14 +313,14 @@ export default class {
    * @return {Promise}
    */
   gotoUserLoc() {
-    this.userService.v6().get().$promise.then((me) => {
+    return this.userService.v6().get().$promise.then((me) => {
       if (!this.userSearch) {
         const filter = {
-          country: me.country.toLowerCase() || this.MONDIAL_RELAY.defaultCountry,
+          country: me.country.toLowerCase() || MONDIAL_RELAY.defaultCountry,
         };
 
         // metropolitan france only
-        if (this.MONDIAL_RELAY.metroFrZipValidator.test(me.zip)) {
+        if (MONDIAL_RELAY.metroFrZipValidator.test(me.zip)) {
           filter.zipcode = me.zip;
         } else if (me.city) {
           filter.city = me.city;
@@ -334,8 +328,8 @@ export default class {
         return this.search(filter);
       }
       return me;
-    }).catch(err => this.$http.get(this.MONDIAL_RELAY.ipLocUrl).then((geoloc) => {
-      if (this.MONDIAL_RELAY.metroFrZipValidator.test(geoloc.data.zip_code)
+    }).catch(err => this.$http.get(MONDIAL_RELAY.ipLocUrl).then((geoloc) => {
+      if (MONDIAL_RELAY.metroFrZipValidator.test(geoloc.data.zip_code)
         && geoloc.data.country_code) {
         return this.search({
           country: geoloc.data.country_code.toLowerCase(),
