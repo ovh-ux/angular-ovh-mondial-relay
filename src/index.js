@@ -7,7 +7,7 @@ import 'ovh-api-services';
 
 import { PICTURES, MONDIAL_RELAY } from './constants';
 
-import directive from './directive';
+import component from './component';
 
 import './index.less';
 
@@ -21,7 +21,7 @@ angular
   ])
   .constant('MONDIAL_RELAY', MONDIAL_RELAY)
   .constant('MONDIAL_RELAY_PICS', PICTURES)
-  .directive('mondialRelay', directive)
+  .component('mondialRelay', component)
   .run(/* @ngTranslationsInject ./translations */);
 
 export default moduleName;
