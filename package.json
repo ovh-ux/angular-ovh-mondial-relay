@@ -3,8 +3,11 @@
   "version": "6.0.2",
   "description": "Display a map to select mondial relay",
   "keywords": [
+    "angularjs",
     "map",
     "mondial",
+    "ovh",
+    "ovhcloud",
     "relay"
   ],
   "repository": "ovh-ux/ng-ovh-mondial-relay",
